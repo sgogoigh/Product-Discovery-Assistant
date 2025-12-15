@@ -17,7 +17,7 @@ app.add_middleware(
     #     "http://localhost:3000",
     #     "https://product-discovery-assistant-one.vercel.app/",
     # ],
-    allow_origins=["*"]
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
