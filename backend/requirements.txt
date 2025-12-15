@@ -28,8 +28,5 @@ pydantic==2.9.2            # Data validation schemas
 google.generativeai
 google.genai
 
-# --- Dependencies ---
-psycopg2
-
 # --- Testing ---
 pytest
