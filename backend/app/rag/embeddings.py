@@ -5,12 +5,13 @@ from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 load_dotenv()
 
-_EMBED_MODEL_NAME = os.getenv(
+_MODEL = os.getenv(
     "EMBED_MODEL",
     "sentence-transformers/all-MiniLM-L6-v2",
 )
 
 _HF_API_KEY = os.getenv("HF_API_KEY")
+
 
 @lru_cache(maxsize=1)
 def _get_client() -> InferenceClient:
@@ -18,7 +19,7 @@ def _get_client() -> InferenceClient:
         raise RuntimeError("HF_API_KEY is not set")
 
     return InferenceClient(
-        model=_EMBED_MODEL_NAME,
+        model=_MODEL,
         token=_HF_API_KEY,
     )
 
@@ -26,13 +27,12 @@ def _get_client() -> InferenceClient:
 def embed_texts(texts: List[str]) -> List[List[float]]:
     client = _get_client()
 
-    embeddings = client.feature_extraction(
-        texts,
-        normalize=True,
+    response = client.embeddings(
+        inputs=texts,
     )
-    if isinstance(embeddings[0], (int, float)):
-        embeddings = [embeddings]
-    return [list(map(float, vec)) for vec in embeddings]
+
+    # response.data -> List[Embedding]
+    return [list(map(float, item.embedding)) for item in response.data]
 
 
 @lru_cache(maxsize=1)
