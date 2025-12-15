@@ -25,8 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-if os.getenv("ENV") == "production":
-    app.add_middleware(HTTPSRedirectMiddleware)
+# if os.getenv("ENV") == "production":
+#     app.add_middleware(HTTPSRedirectMiddleware)
 
 # Include routers under a unified /api namespace
 app.include_router(routes_products.router, prefix="/api/products", tags=["Products"])
