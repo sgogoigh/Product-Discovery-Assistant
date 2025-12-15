@@ -90,7 +90,6 @@ def chat(req: ChatRequest):
     raw_results = retrieve_products(
         query=search_query,
         top_k=req.top_k,
-        # filters=state["constraints"],
     )
     if constraints.get("max_price"):
         raw_results = [

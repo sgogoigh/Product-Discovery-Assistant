@@ -4,9 +4,7 @@ def _normalize(text: str) -> str:
     return " ".join((text or "").split()).strip()
 
 def chunk_product(row: Dict) -> List[Dict]:
-    """
-    Create chunks for description, title, and each individual feature item.
-    """
+    """ Create chunks for description, title, and each individual feature item. """
     chunks: List[Dict] = []
     pid = row["id"]
     base_meta = {
@@ -32,7 +30,7 @@ def chunk_product(row: Dict) -> List[Dict]:
                 break
             start = max(0, end - overlap)
 
-    # --- Features chunks (per item) ---
+    # Features chunks (per item)
     feats = row.get("features") or {}
     normalized_feats = {
         "product_features": feats.get("Product Features") or [],
@@ -60,7 +58,7 @@ def chunk_product(row: Dict) -> List[Dict]:
     add_feature_items("fabric_features", normalized_feats["fabric_features"])
     add_feature_items("purpose", normalized_feats["purpose"])
 
-    # --- Title chunk ---
+    # Title chunk
     title = base_meta["title"]
     if title:
         meta = {**base_meta, "field": "title", "text": title}

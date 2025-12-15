@@ -108,7 +108,7 @@ def extract_features(soup):
                     })
 
             if items:
-                break  # take first valid populated tab
+                break
 
         if items:
             features[section] = items
@@ -264,7 +264,7 @@ def save_to_db(items, engine):
     print(f"[db] inserted={inserted}, skipped={skipped}")
 
 def collect_product_links_from_collection(collection_url: str, limit: int = 50) -> List[str]:
-    """Grab product links from a collection listing page (pagination not implemented)."""
+    """Grab product links from a collection listing page"""
     resp = safe_get(collection_url)
     if not resp:
         return []

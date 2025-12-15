@@ -12,13 +12,12 @@ requests==2.32.3          # HTTP requests
 beautifulsoup4==4.12.3    # HTML parsing
 
 # --- Embeddings / Vectorisation ---
-# huggingface-hub==0.27.1   # Access HuggingFace models
+# huggingface-hub==0.27.1       # Access HuggingFace models
 # sentence-transformers==3.2.1  # Pretrained embedding models
 # torch==2.5.1                  # Required backend for sentence-transformers
 # transformers==4.46.2          # HuggingFace models
 
-# --- Optional Vector DB (if using Chroma/Pinecone) ---
-# chromadb==0.5.5            # Local vector DB option
+# --- Vector DB (Pinecone) ---
 pinecone-client==3.2.2    # Uncomment if using Pinecone
 
 # --- Utilities ---

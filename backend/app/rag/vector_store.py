@@ -6,9 +6,9 @@ from typing import List, Dict, Any
 from pinecone import Pinecone, ServerlessSpec
 
 _PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-_PINECONE_INDEX = os.getenv("PINECONE_INDEX", "hunnit-products")
-_PINECONE_CLOUD = os.getenv("PINECONE_CLOUD", "aws")
-_PINECONE_REGION = os.getenv("PINECONE_REGION", "us-west-2")
+_PINECONE_INDEX = os.getenv("PINECONE_INDEX")
+_PINECONE_CLOUD = os.getenv("PINECONE_CLOUD")
+_PINECONE_REGION = os.getenv("PINECONE_REGION")
 
 pc = Pinecone(api_key=_PINECONE_API_KEY)
 

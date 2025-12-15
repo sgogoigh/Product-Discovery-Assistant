@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl, Field
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 # Input schema for creating a product

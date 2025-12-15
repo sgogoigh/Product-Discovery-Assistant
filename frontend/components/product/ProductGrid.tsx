@@ -23,7 +23,7 @@ export default function ProductGrid(props: Props) {
     );
   }
 
-  // ✅ CHAT RESULTS
+  // CHAT PRODUCTS
   if (props.variant === "chat") {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -37,7 +37,7 @@ export default function ProductGrid(props: Props) {
     );
   }
 
-  // ✅ CATALOG PRODUCTS
+  // CATALOG PRODUCTS
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {props.products.map((p) => (

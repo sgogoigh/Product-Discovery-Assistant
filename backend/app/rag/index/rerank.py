@@ -1,9 +1,7 @@
 from typing import List, Dict
 
 def diversify(results: List[Dict], limit: int = 10, max_per_field: int = 3) -> List[Dict]:
-    """
-    Limit how many items of the same field appear in the final list.
-    """
+    """ Limit how many items of the same field appear in the final list. """
     field_counts: Dict[str, int] = {}
     final: List[Dict] = []
 
