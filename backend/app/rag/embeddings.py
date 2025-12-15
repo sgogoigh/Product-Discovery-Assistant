@@ -1,23 +1,52 @@
-# backend/app/rag/embeddings.py
 import os
 from typing import List
 from functools import lru_cache
+import requests
+from dotenv import load_dotenv
+load_dotenv()
 
-# Default: local sentence-transformers; switch to OpenAI later if needed
-_EMBED_MODEL_NAME = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+# Hugging Face Inference API setup
+_EMBED_MODEL_NAME = os.getenv(
+    "EMBED_MODEL",
+    "sentence-transformers/all-MiniLM-L6-v2",
+)
+_HF_API_KEY = os.getenv("HF_API_KEY")
+_HF_ENDPOINT = (
+    f"https://api-inference.huggingface.co/pipeline/feature-extraction/{_EMBED_MODEL_NAME}"
+)
+
+_HEADERS = {
+    "Authorization": f"Bearer {_HF_API_KEY}",
+    "Content-Type": "application/json",
+}
+
 
 @lru_cache(maxsize=1)
-def _load_model():
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(_EMBED_MODEL_NAME)
-    # probe dimension
-    dim = len(model.encode(["dim_probe"], normalize_embeddings=True)[0])
-    return model, dim
+def _embedding_dim() -> int:
+    # probe once and cache
+    vec = embed_texts(["dim_probe"])[0]
+    return len(vec)
+
 
 def embedding_dim() -> int:
-    _, dim = _load_model()
-    return dim
+    return _embedding_dim()
+
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
-    model, _ = _load_model()
-    return model.encode(texts, normalize_embeddings=True).tolist()
+    if not _HF_API_KEY:
+        raise RuntimeError("HF_API_KEY is not set")
+
+    response = requests.post(
+        _HF_ENDPOINT,
+        headers=_HEADERS,
+        json={"inputs": texts},
+        timeout=60,
+    )
+    response.raise_for_status()
+
+    embeddings = response.json()
+
+    if isinstance(embeddings[0], (int, float)):
+        embeddings = [embeddings]
+
+    return embeddings
