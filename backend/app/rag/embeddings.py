@@ -11,9 +11,7 @@ _EMBED_MODEL_NAME = os.getenv(
     "sentence-transformers/all-MiniLM-L6-v2",
 )
 _HF_API_KEY = os.getenv("HF_API_KEY")
-_HF_ENDPOINT = (
-    f"https://api-inference.huggingface.co/pipeline/feature-extraction/{_EMBED_MODEL_NAME}"
-)
+_HF_ENDPOINT = f"https://api-inference.huggingface.co/models/{_EMBED_MODEL_NAME}"
 
 _HEADERS = {
     "Authorization": f"Bearer {_HF_API_KEY}",
