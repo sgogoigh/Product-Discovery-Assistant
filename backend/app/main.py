@@ -18,7 +18,7 @@ app.add_middleware(
     #     "https://product-discovery-assistant-one.vercel.app/",
     # ],
     allow_origins=["*"]
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
