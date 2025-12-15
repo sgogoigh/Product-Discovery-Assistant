@@ -13,10 +13,11 @@ app = FastAPI(title="AI Product Discovery Assistant")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://product-discovery-assistant-one.vercel.app/",
-    ],
+    # allow_origins=[
+    #     "http://localhost:3000",
+    #     "https://product-discovery-assistant-one.vercel.app/",
+    # ],
+    allow_origins=["*"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
