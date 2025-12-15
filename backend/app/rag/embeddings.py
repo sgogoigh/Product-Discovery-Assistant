@@ -1,46 +1,38 @@
-# backend/app/rag/embeddings.py
-
 import os
-import requests
 from typing import List
 from functools import lru_cache
+from huggingface_hub import InferenceClient
 
 _EMBED_MODEL_NAME = os.getenv(
     "EMBED_MODEL",
     "sentence-transformers/all-MiniLM-L6-v2",
 )
+
 _HF_API_KEY = os.getenv("HF_API_KEY")
 
-_HF_ENDPOINT = (
-    f"https://api-inference.huggingface.co/models/{_EMBED_MODEL_NAME}"
-)
-
-_HEADERS = {
-    "Authorization": f"Bearer {_HF_API_KEY}",
-    "Content-Type": "application/json",
-}
-
-
-def embed_texts(texts: List[str]) -> List[List[float]]:
+@lru_cache(maxsize=1)
+def _get_client() -> InferenceClient:
     if not _HF_API_KEY:
         raise RuntimeError("HF_API_KEY is not set")
 
-    response = requests.post(
-        _HF_ENDPOINT,
-        headers=_HEADERS,
-        json={"inputs": texts},
-        timeout=60,
+    return InferenceClient(
+        model=_EMBED_MODEL_NAME,
+        token=_HF_API_KEY,
     )
-    response.raise_for_status()
 
-    embeddings = response.json()
 
-    # Single input edge case
+def embed_texts(texts: List[str]) -> List[List[float]]:
+    client = _get_client()
+
+    embeddings = client.feature_extraction(
+        texts,
+        normalize=True,
+    )
+    # SDK may return single vector for single input
     if isinstance(embeddings[0], (int, float)):
         embeddings = [embeddings]
 
     return embeddings
-
 
 @lru_cache(maxsize=1)
 def embedding_dim() -> int:
