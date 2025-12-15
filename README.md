@@ -8,7 +8,12 @@ The system combines:
 - A lightweight agent loop for conversational refinement
 - A clean, ecommerce-style frontend for interaction
 
----
+
+## Live Links
+### FrontEnd (Vercel) - Entry point
+`https://product-discovery-assistant-one.vercel.app/`
+### Backend (Railway)
+`jubilant-courtesy-production-fed8.up.railway.app`
 
 ## How to Run the Project Locally
 
