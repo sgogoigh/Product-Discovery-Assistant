@@ -6,26 +6,27 @@ from sqlalchemy import text
 from app.db import database
 from app.api import routes_products, routes_chat
 from app.utils.logger import logger  # central logging
+import os
+from dotenv import load_dotenv
+load_dotenv()
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware    
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
-# Create FastAPI app
-app = FastAPI(title="AI Product Discovery Assistant", 
-    redirect_slashes=False)
+app = FastAPI(title="AI powered product discovery assistant", redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
-    # allow_origins=[
-    #     "http://localhost:3000",
-    #     "https://product-discovery-assistant-one.vercel.app/",
-    # ],
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://product-discovery-assistant-one.vercel.app"
+    ],
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "UPDATE", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 
-app.add_middleware(HTTPSRedirectMiddleware)
+if os.getenv("ENV") == "production":
+    app.add_middleware(HTTPSRedirectMiddleware)
 
 # Include routers under a unified /api namespace
 app.include_router(routes_products.router, prefix="/api/products", tags=["Products"])
