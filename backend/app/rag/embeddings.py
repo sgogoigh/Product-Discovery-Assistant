@@ -1,33 +1,24 @@
+# backend/app/rag/embeddings.py
+
 import os
+import requests
 from typing import List
 from functools import lru_cache
-import requests
-from dotenv import load_dotenv
-load_dotenv()
 
-# Hugging Face Inference API setup
 _EMBED_MODEL_NAME = os.getenv(
     "EMBED_MODEL",
     "sentence-transformers/all-MiniLM-L6-v2",
 )
 _HF_API_KEY = os.getenv("HF_API_KEY")
-_HF_ENDPOINT = f"https://api-inference.huggingface.co/models/{_EMBED_MODEL_NAME}"
+
+_HF_ENDPOINT = (
+    f"https://router.huggingface.co/hf-inference/models/{_EMBED_MODEL_NAME}"
+)
 
 _HEADERS = {
     "Authorization": f"Bearer {_HF_API_KEY}",
     "Content-Type": "application/json",
 }
-
-
-@lru_cache(maxsize=1)
-def _embedding_dim() -> int:
-    # probe once and cache
-    vec = embed_texts(["dim_probe"])[0]
-    return len(vec)
-
-
-def embedding_dim() -> int:
-    return _embedding_dim()
 
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
@@ -44,7 +35,13 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
 
     embeddings = response.json()
 
+    # Single input edge case
     if isinstance(embeddings[0], (int, float)):
         embeddings = [embeddings]
 
     return embeddings
+
+
+@lru_cache(maxsize=1)
+def embedding_dim() -> int:
+    return len(embed_texts(["dim_probe"])[0])
