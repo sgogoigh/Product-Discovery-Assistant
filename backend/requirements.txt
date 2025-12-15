@@ -1,0 +1,35 @@
+# --- Core Web Framework ---
+fastapi==0.115.0          # FastAPI for building APIs
+uvicorn[standard]==0.30.0 # ASGI server to run FastAPI
+
+# --- Database ---
+SQLAlchemy==2.0.36        # ORM for PostgreSQL
+psycopg2-binary==2.9.9    # PostgreSQL driver
+python-dotenv==1.0.1      # Load environment variables from .env
+
+# --- Scraping ---
+requests==2.32.3          # HTTP requests
+beautifulsoup4==4.12.3    # HTML parsing
+
+# --- Embeddings / Vectorisation ---
+sentence-transformers==3.2.1  # Pretrained embedding models
+torch==2.5.1                  # Required backend for sentence-transformers
+transformers==4.46.2          # HuggingFace models
+
+# --- Optional Vector DB (if using Chroma/Pinecone) ---
+# chromadb==0.5.5            # Local vector DB option
+pinecone-client==3.2.2    # Uncomment if using Pinecone
+# weaviate-client==3.25.0   # Uncomment if using Weaviate
+
+# --- Utilities ---
+pydantic==2.9.2            # Data validation schemas
+
+# --- LLM (Gemini) ---
+google.generativeai
+google.genai
+
+# --- Dependencies ---
+psycopg2
+
+# --- Testing ---
+pytest

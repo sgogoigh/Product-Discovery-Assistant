@@ -1,0 +1,103 @@
+Neusearch/
+├── backend/                            # FastAPI backend (RAG + agent logic)
+│   ├── app/
+│   │   ├── main.py                     # FastAPI app entrypoint, router mounting, startup hooks
+│   │   ├── config.py                   # Environment and configuration settings
+│   │   │
+│   │   ├── api/                        # API route definitions
+│   │   │   ├── routes_products.py      # CRUD APIs for products
+│   │   │   └── routes_chat.py          # Chat endpoint (agent + RAG orchestration)
+│   │   │
+│   │   ├── agent/                      # Explicit agent loop (conversation intelligence)
+│   │   │   ├── loop.py                 # Main agent loop (intent → action → response)
+│   │   │   ├── planner.py              # Decides agent actions (SEARCH, CLARIFY, GREET)
+│   │   │   ├── state.py                # Conversation state management
+│   │   │   └── tools.py                # Tools used by the agent (search, refine, explain)
+│   │   │
+│   │   ├── rag/                        # Retrieval-Augmented Generation pipeline
+│   │   │   ├── chunking.py             # Text chunking strategy
+│   │   │   ├── embeddings.py           # SentenceTransformer embeddings
+│   │   │   ├── ingest.py               # Product ingestion into vector store
+│   │   │   ├── retrieval.py            # Semantic search over vector store
+│   │   │   ├── rerank_index.py         # Reranking & diversification logic
+│   │   │   ├── reasoning.py            # Lightweight reasoning helpers
+│   │   │   ├── vector_store.py         # Vector store abstraction (FAISS-like)
+│   │   │   │
+│   │   │   ├── index/                  # Index management scripts
+│   │   │   │   ├── create_index.py
+│   │   │   │   ├── clear_index.py
+│   │   │   │   └── rerank_index.py
+│   │   │   │
+│   │   │   └── test/                   
+│   │   │       ├── test_index.py
+│   │   │       ├── test_queries.py
+│   │   │       └── test_rag.py
+│   │   │
+│   │   ├── db/                        # Database layer (SQLAlchemy)
+│   │   │   ├── database.py            # DB engine and session
+│   │   │   ├── models.py              # ORM models
+│   │   │   └── crud.py                # CRUD operations
+│   │   │
+│   │   ├── scraping/                  # Product scraping utilities
+│   │   │   ├── scraper.py             # Scraper logic
+│   │   │   └── utils.py               # Scraping helpers
+│   │   │
+│   │   ├── utils/                     # Shared backend utilities
+│   │   │   ├── logger.py              # Centralized structured logging
+│   │   │   └── exceptions.py          # Custom exceptions
+│   │   │
+│   │   └── tests/                
+│   │       └── testing.py
+│   │
+│   ├── requirements.txt          # Backend dependencies
+│   ├── Dockerfile                # Backend containerization
+│   └── README.md                 # Backend-specific documentation
+│
+├── frontend/                     # Next.js frontend (UI + UX)
+│   ├── app/                      # Next.js App Router
+│   │   ├── layout.tsx             # Global layout (mounts ChatLauncher)
+│   │   ├── globals.css            # Global Tailwind styles
+│   │   ├── page.tsx               # Home: product discovery + RAG search
+│   │   │
+│   │   ├── products/
+│   │   │   └── [product_id]/
+│   │   │       └── page.tsx       # Product detail page
+│   │   │
+│   │   └── chat/
+│   │       └── page.tsx           # Conversational product assistant
+│   │
+│   ├── components/
+│   │   ├── chat/                  # Chat-related UI components
+│   │   │   ├── ChatLauncher.tsx   # Floating chat icon (opens /chat)
+│   │   │   ├── ChatWindow.tsx     # Chat orchestration logic
+│   │   │   ├── ChatBubble.tsx     # User vs bot message bubbles
+│   │   │   ├── ChatInput.tsx      # Chat input box
+│   │   │   └── ChatProductCard.tsx# Product cards inside chat
+│   │   │
+│   │   ├── product/               # Product UI components
+│   │   │   ├── ProductGrid.tsx    # Reusable product grid
+│   │   │   ├── ProductCard.tsx    # Product card (home + reuse)
+│   │   │   ├── FeatureSection.tsx # Product features section
+│   │   │   └── FeatureBlock.tsx
+│   │   │
+│   │   ├── layout/                # Layout helpers
+│   │   │   ├── Header.tsx
+│   │   │   └── Container.tsx
+│   │   │
+│   │   └── ui/                    # Generic UI components
+│   │       ├── Button.tsx
+│   │       └── Loading.tsx
+│   │
+│   ├── lib/                       # Frontend utilities
+│   │   ├── api.ts                 # API calls to FastAPI backend
+│   │   ├── types.ts               # Shared TypeScript types
+│   │   └── config.ts              # API base URL
+│   │
+│   ├── public/                    # Static assets
+│   ├── next.config.js
+│   ├── tailwind.config.ts
+│   ├── package.json
+│   └── README.md                  # Frontend documentation
+│
+├── .env                           # Environment variables
+└── README.md                      # Root README (system overview)
