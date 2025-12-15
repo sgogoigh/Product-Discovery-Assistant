@@ -11,7 +11,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 // GET /api/products
 export async function getProducts(): Promise<Product[]> {
-  const res = await fetch(`${API_BASE_URL}/api/products`, {
+  const res = await fetch(`${API_BASE_URL}/api/products/`, {
     cache: "no-store",
   });
   return handleResponse<Product[]>(res);
@@ -31,7 +31,7 @@ export async function chat(
   query: string,
   context?: any
 ): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/api/chat`, {
+  const res = await fetch(`${API_BASE_URL}/api/chat/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

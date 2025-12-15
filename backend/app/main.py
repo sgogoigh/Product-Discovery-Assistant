@@ -7,9 +7,11 @@ from app.db import database
 from app.api import routes_products, routes_chat
 from app.utils.logger import logger  # central logging
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 # Create FastAPI app
-app = FastAPI(title="AI Product Discovery Assistant")
+app = FastAPI(title="AI Product Discovery Assistant", 
+    redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,6 +24,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(HTTPSRedirectMiddleware)
 
 # Include routers under a unified /api namespace
 app.include_router(routes_products.router, prefix="/api/products", tags=["Products"])
