@@ -12,7 +12,7 @@ _EMBED_MODEL_NAME = os.getenv(
 _HF_API_KEY = os.getenv("HF_API_KEY")
 
 _HF_ENDPOINT = (
-    f"https://router.huggingface.co/hf-inference/models/{_EMBED_MODEL_NAME}"
+    f"https://api-inference.huggingface.co/models/{_EMBED_MODEL_NAME}"
 )
 
 _HEADERS = {
