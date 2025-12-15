@@ -48,7 +48,7 @@ export async function chat(
 }
 
 export async function chatSearch(query: string): Promise<ChatResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/chat/`, {
+  const res = await fetch(`${API_BASE_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
