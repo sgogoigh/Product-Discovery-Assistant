@@ -19,7 +19,6 @@ transformers==4.46.2          # HuggingFace models
 # --- Optional Vector DB (if using Chroma/Pinecone) ---
 # chromadb==0.5.5            # Local vector DB option
 pinecone-client==3.2.2    # Uncomment if using Pinecone
-# weaviate-client==3.25.0   # Uncomment if using Weaviate
 
 # --- Utilities ---
 pydantic==2.9.2            # Data validation schemas
