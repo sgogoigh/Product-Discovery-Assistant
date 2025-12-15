@@ -1,4 +1,3 @@
-# backend/app/rag/ingest.py
 import sys
 from typing import List, Dict
 from sqlalchemy import text
@@ -37,7 +36,7 @@ def ingest_all(batch_size: int = 100):
                     continue
 
                 texts = [c["text"] for c in chunks]
-                vecs = embed_texts(texts)
+                vecs = embed_texts(texts, task_type="RETRIEVAL_DOCUMENT")
                 payload = [{
                     "id": c["id"],
                     "values": vecs[i],

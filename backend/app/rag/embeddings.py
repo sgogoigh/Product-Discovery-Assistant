@@ -1,38 +1,45 @@
 import os
 from typing import List
 from functools import lru_cache
-from huggingface_hub import InferenceClient
+import google.generativeai as genai
 from dotenv import load_dotenv
+
 load_dotenv()
 
-_MODEL = os.getenv(
+# Gemini embedding model
+_EMBED_MODEL_NAME = os.getenv(
     "EMBED_MODEL",
-    "sentence-transformers/all-MiniLM-L6-v2",
+    "text-embedding-004",
 )
 
-_HF_API_KEY = os.getenv("HF_API_KEY")
+_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not _GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY is not set")
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> InferenceClient:
-    if not _HF_API_KEY:
-        raise RuntimeError("HF_API_KEY is not set")
-
-    return InferenceClient(
-        model=_MODEL,
-        token=_HF_API_KEY,
-    )
+def _configure():
+    genai.configure(api_key=_GEMINI_API_KEY)
+    return genai
 
 
-def embed_texts(texts: List[str]) -> List[List[float]]:
-    client = _get_client()
+def embed_texts(
+    texts: List[str],
+    task_type: str = "RETRIEVAL_DOCUMENT",
+) -> List[List[float]]:
+    genai_client = _configure()
+    embeddings: List[List[float]] = []
 
-    response = client.embeddings(
-        inputs=texts,
-    )
+    for text in texts:
+        result = genai_client.embed_content(
+            model=_EMBED_MODEL_NAME,
+            content=text,
+            task_type=task_type,
+        )
+        embeddings.append(list(map(float, result["embedding"])))
 
-    # response.data -> List[Embedding]
-    return [list(map(float, item.embedding)) for item in response.data]
+    return embeddings
 
 
 @lru_cache(maxsize=1)

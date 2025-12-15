@@ -27,7 +27,7 @@ def detect_category(query: str) -> str | None:
     return None
 
 def retrieve_products(query: str, top_k: int = 30) -> List[Dict]:
-    qvec = embed_texts([query])[0]
+    qvec = embed_texts([query], task_type="RETRIEVAL_QUERY")[0]
     res = query_vectors(qvec, top_k=top_k)
 
     grouped: Dict[str, Dict] = {}
