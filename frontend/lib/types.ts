@@ -29,7 +29,7 @@ export type ChatProductCard = {
 
 export type ChatResponse = {
   query: string;
-  results: Product[];
+  results: ChatProductCard[];
   clarification?: string;
   context?: Record<string, any>;
 };

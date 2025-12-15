@@ -1,18 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Product } from "@/lib/types";
+import type { Product, ChatProductCard } from "@/lib/types";
 import { getProducts, chatSearch } from "@/lib/api";
 import ProductGrid from "@/components/product/ProductGrid";
 
 export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [chatResults, setChatResults] = useState<ChatProductCard[] | null>(null);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Load initial products (default catalog view)
+  // Load catalog products on first load
   useEffect(() => {
-    getProducts().then(setProducts).catch(console.error);
+    getProducts()
+      .then(setProducts)
+      .catch(console.error);
   }, []);
 
   async function handleSearch() {
@@ -21,7 +24,7 @@ export default function HomePage() {
     setLoading(true);
     try {
       const res = await chatSearch(query);
-      setProducts(res.results ?? []);
+      setChatResults(res.results ?? []);
     } finally {
       setLoading(false);
     }
@@ -47,15 +50,19 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Loading state */}
+      {/* Loading */}
       {loading && (
         <p className="text-center text-sm text-gray-500 mb-6">
           Searching…
         </p>
       )}
 
-      {/* Product grid */}
-      <ProductGrid products={products} />
+      {/* Products */}
+      {chatResults ? (
+        <ProductGrid products={chatResults} variant="chat" />
+      ) : (
+        <ProductGrid products={products} />
+      )}
     </div>
   );
 }
