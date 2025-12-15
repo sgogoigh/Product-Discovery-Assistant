@@ -2,6 +2,8 @@ import os
 from typing import List
 from functools import lru_cache
 from huggingface_hub import InferenceClient
+from dotenv import load_dotenv
+load_dotenv()
 
 _EMBED_MODEL_NAME = os.getenv(
     "EMBED_MODEL",
@@ -28,11 +30,10 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
         texts,
         normalize=True,
     )
-    # SDK may return single vector for single input
     if isinstance(embeddings[0], (int, float)):
         embeddings = [embeddings]
+    return [list(map(float, vec)) for vec in embeddings]
 
-    return embeddings
 
 @lru_cache(maxsize=1)
 def embedding_dim() -> int:
