@@ -8,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import config
 from app.api import routes_chat, routes_products
@@ -46,6 +47,22 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="AI powered product discovery assistant", redirect_slashes=False, lifespan=lifespan)
+
+
+# Registered BEFORE CORSMiddleware so it sits inside it: error responses get CORS headers.
+# (FastAPI's Exception handler runs outside CORS; browsers then report a 500 as a network error.)
+@app.middleware("http")
+async def catch_all_errors(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except SQLAlchemyError:
+        logger.exception("Database error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=503, content={"error": "Product database is unavailable"})
+    except Exception:
+        # Full detail goes to the log only; clients never see internals (DB URLs, keys, traces).
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -92,13 +109,6 @@ def readyz():
         checks["vector_index"] = "error"
     ok = all(v == "ok" for v in checks.values())
     return JSONResponse(status_code=200 if ok else 503, content={"status": "ok" if ok else "degraded", **checks})
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    # Full detail goes to the log only; clients never see internals (DB URLs, keys, traces).
-    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
-    return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
 
 
 @app.exception_handler(HTTPException)
