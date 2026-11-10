@@ -11,7 +11,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Neusearch — Find activewear in plain words", template: "%s · Neusearch" },
+  title: { default: "Find activewear in plain words", template: "%s" },
   description:
     "Find activewear in plain language: semantic search and Neu, a conversational shopping assistant built on RAG.",
 };
