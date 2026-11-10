@@ -1,31 +1,19 @@
-# --- Core Web Framework ---
-fastapi==0.115.0          # FastAPI for building APIs
-uvicorn[standard]==0.30.0 # ASGI server to run FastAPI
+# --- Web ---
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+pydantic==2.9.2
 
-# --- Database ---
-SQLAlchemy==2.0.36        # ORM for PostgreSQL
-psycopg2-binary==2.9.9    # PostgreSQL driver
-python-dotenv==1.0.1      # Load environment variables from .env
+# --- Database (Supabase Postgres) ---
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
 
 # --- Scraping ---
-requests==2.32.3          # HTTP requests
-beautifulsoup4==4.12.3    # HTML parsing
+requests==2.32.3
+beautifulsoup4==4.12.3
 
-# --- Embeddings / Vectorisation ---
-# huggingface-hub==0.27.1       # Access HuggingFace models
-# sentence-transformers==3.2.1  # Pretrained embedding models
-# torch==2.5.1                  # Required backend for sentence-transformers
-# transformers==4.46.2          # HuggingFace models
+# --- Vector DB ---
+pinecone-client==3.2.2
 
-# --- Vector DB (Pinecone) ---
-pinecone-client==3.2.2    # Uncomment if using Pinecone
-
-# --- Utilities ---
-pydantic==2.9.2            # Data validation schemas
-
-# --- LLM (Gemini) ---
-google.generativeai
-google.genai
-
-# --- Testing ---
-pytest
+# --- LLM + embeddings (Gemini) ---
+google-genai==1.52.0
