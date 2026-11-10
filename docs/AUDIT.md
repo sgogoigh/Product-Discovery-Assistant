@@ -179,11 +179,11 @@ In the "Launch from GitHub" dialog:
 
 Not needed: `SUPABASE_DB_PASSWORD`, `HF_API_KEY`, `ENV`, `EMBEDDING_MODEL` (wrong name, see D3).
 
-**Port:** the container listens on **8000**. After launch, check that the generated `fly.toml` has `internal_port = 8000` under `[http_service]` (Fly often defaults to 8080, and a mismatch makes health checks fail). Alternatively, change the Dockerfile `CMD` to `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}` using shell form.
+**Port:** (updated) the container listens on `$PORT`, default **8080**, matching Fly's default. `backend/fly.toml` pins `internal_port = 8080`, the `/health` check and `/metrics` scraping.
 
 **Memory:** 512 MB shared-cpu is enough, since the image no longer bundles torch or sentence-transformers.
 
 **After deploy:**
-1. `curl https://<app>.fly.dev/health` should show `"db": 1`.
+1. `curl https://<app>.fly.dev/health` should return `{"status":"ok"}`, and `/readyz` should show `db` and `vector_index` as `ok`.
 2. Set `NEXT_PUBLIC_API_BASE_URL=https://<app>.fly.dev` in Vercel (after F11 is fixed), then redeploy.
 3. Update the README's live backend link.
