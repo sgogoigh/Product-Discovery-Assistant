@@ -68,3 +68,19 @@ def test_cors_allows_frontend_and_vercel_previews():
         assert res.headers.get("access-control-allow-origin") == origin
     res = c.options("/api/chat/", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"})
     assert "access-control-allow-origin" not in res.headers
+
+
+def test_request_id_is_echoed_or_generated(client):
+    res = client.get("/health", headers={"X-Request-ID": "abc123"})
+    assert res.headers["X-Request-ID"] == "abc123"
+    generated = client.get("/health").headers["X-Request-ID"]
+    assert generated and generated != "abc123"
+
+
+def test_metrics_endpoint_counts_requests_by_route_template(client):
+    client.post("/api/chat/", json={"query": "leggings"})
+    body = client.get("/metrics").text
+    assert "http_requests_total" in body
+    assert 'route="/api/chat/"' in body
+    assert "chat_turns_total" in body
+    assert "chat_stage_duration_seconds" in body

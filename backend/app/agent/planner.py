@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.agent.state import CATEGORIES, Action, ChatState, ParsedMessage
 from app.rag.embeddings import get_client
+from app.utils import metrics
 from app.utils.logger import logger
 
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-2.5-flash")
@@ -39,14 +40,21 @@ def _generate(prompt: str, schema: type[BaseModel], max_tokens: int):
     with _cache_lock:
         if key in _CACHE:
             _CACHE.move_to_end(key)
+            metrics.LLM_CALLS.labels(schema.__name__, "cached").inc()
             return _CACHE[key].model_copy(deep=True)
-    out = _call(prompt, schema, max_tokens)
+    try:
+        out = _call(prompt, schema, max_tokens)
+    except Exception:
+        metrics.LLM_CALLS.labels(schema.__name__, "error").inc()
+        raise
     if isinstance(out, schema):
         with _cache_lock:
             _CACHE[key] = out.model_copy(deep=True)
             while len(_CACHE) > _CACHE_SIZE:
                 _CACHE.popitem(last=False)
+        metrics.LLM_CALLS.labels(schema.__name__, "ok").inc()
     else:
+        metrics.LLM_CALLS.labels(schema.__name__, "unparsed").inc()
         logger.warning("llm %s: response did not parse", schema.__name__)
     return out
 
@@ -217,6 +225,7 @@ def llm_reply(
     for r in out.reasons:
         r.why = _clean(r.why)
     if not out.message or _looks_broken(out.message):
+        metrics.LLM_CALLS.labels("_ReplyOut", "discarded").inc()
         logger.warning("llm_reply discarded: %r", out.message[:120])
         return None
     out.reasons = [r for r in out.reasons

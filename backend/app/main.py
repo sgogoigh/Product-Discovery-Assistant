@@ -1,21 +1,47 @@
 import faulthandler
 import os
 import threading
+import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import config
 from app.api import routes_chat, routes_products
 from app.db import database
-from app.utils.logger import logger
+from app.utils import metrics
+from app.utils.logger import logger, request_id
 
 faulthandler.enable()
+
+
+def _init_sentry() -> None:
+    """Error reporting, only when SENTRY_DSN is set. No request bodies or PII are sent."""
+    dsn = os.getenv("SENTRY_DSN")
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=os.getenv("SENTRY_ENVIRONMENT", os.getenv("FLY_APP_NAME", "local")),
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+            send_default_pii=False,
+        )
+        logger.info("Sentry enabled")
+    except Exception as exc:
+        logger.warning("Sentry init failed: %s", str(exc)[:200])
+
+
+_init_sentry()
 
 
 def _warm_up() -> None:
@@ -70,8 +96,37 @@ app.add_middleware(
     allow_origin_regex=config.cors_origin_regex(),
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Admin-Key"],
+    allow_headers=["Content-Type", "X-Admin-Key", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
+
+_QUIET = {"/health", "/metrics", "/readyz"}
+
+
+# Outermost: every response, including errors and CORS preflights, gets a request id,
+# one access-log line and HTTP metrics.
+@app.middleware("http")
+async def observe(request: Request, call_next):
+    rid = (request.headers.get("x-request-id") or "")[:64] or uuid.uuid4().hex[:16]
+    token = request_id.set(rid)
+    start = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Request-ID"] = rid
+        return response
+    finally:
+        elapsed = time.perf_counter() - start
+        route = request.scope.get("route")
+        template = getattr(route, "path", None) or "unmatched"
+        metrics.HTTP_REQUESTS.labels(request.method, template, str(status)).inc()
+        metrics.HTTP_LATENCY.labels(request.method, template).observe(elapsed)
+        level = 10 if request.url.path in _QUIET and status < 400 else 20  # DEBUG / INFO
+        logger.log(level, "%s %s %d %.0fms", request.method, request.url.path, status, elapsed * 1000,
+                   extra={"method": request.method, "path": request.url.path, "status": status,
+                          "duration_ms": round(elapsed * 1000)})
+        request_id.reset(token)
 
 app.include_router(routes_products.router, prefix="/api/products", tags=["Products"])
 app.include_router(routes_chat.router, prefix="/api/chat", tags=["Chat"])
@@ -86,6 +141,11 @@ def read_root():
 def health():
     """Liveness: the process is up. Never touches dependencies."""
     return {"status": "ok"}
+
+
+@app.get("/metrics", include_in_schema=False)
+def prometheus_metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/readyz")

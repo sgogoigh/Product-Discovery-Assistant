@@ -10,6 +10,7 @@ from app.agent.state import Action, ChatState, Constraints, ParsedMessage, Shown
 from app.agent.tools import sort_by_price
 from app.rag.index.rerank import diversify
 from app.rag.retrieval import retrieve_products
+from app.utils import metrics
 from app.utils.logger import logger
 
 STARTER_SUGGESTIONS = [
@@ -185,6 +186,8 @@ def _template_reply(products: List[Dict], c: Constraints, query: str, situation:
 def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
     t0 = time.perf_counter()
     parsed = understand(message, state)
+    metrics.CHAT_STAGE.labels("understand").observe(time.perf_counter() - t0)
+    metrics.CHAT_TURNS.labels(parsed.action.value).inc()
     logger.info("[AGENT] action=%s source=%s parse_ms=%d parsed=%s", parsed.action.value, parsed.source,
                 (time.perf_counter() - t0) * 1000, parsed.model_dump(exclude={"reply"}, exclude_none=True))
     recent = _remember(state, message)
@@ -199,9 +202,11 @@ def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
     query, c, budget, sort_asc = resolve(parsed, state)
     t1 = time.perf_counter()
     results = retrieve_products(query, category=c.category, min_price=c.min_price, max_price=c.max_price)
+    metrics.CHAT_STAGE.labels("retrieve").observe(time.perf_counter() - t1)
     logger.info("[AGENT] retrieve_ms=%d hits=%d", (time.perf_counter() - t1) * 1000, len(results))
 
     if not results:
+        metrics.CHAT_EMPTY.inc()
         empty = _empty(query, c, parsed, state)
         empty.state = empty.state.model_copy(update={"recent": recent})
         return empty
@@ -213,6 +218,7 @@ def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
     situation = _situation(parsed, state, c)
     t2 = time.perf_counter()
     reply = llm_reply(message, describe(c), products, recent=state.recent, situation=situation)
+    metrics.CHAT_STAGE.labels("reply").observe(time.perf_counter() - t2)
     logger.info("[AGENT] reply_ms=%d llm=%s", (time.perf_counter() - t2) * 1000, reply is not None)
     if reply:
         reasons = {r.product_id: r.why for r in reply.reasons}
