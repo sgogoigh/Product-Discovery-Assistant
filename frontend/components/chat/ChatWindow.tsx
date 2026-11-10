@@ -1,12 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { chat } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import type { ChatContext, ChatProductCard as Product, Constraints } from "@/lib/types";
-import Button from "@/components/ui/Button";
-import { Spinner } from "@/components/ui/Loading";
-import ChatBubble from "./ChatBubble";
+import ChatBubble, { NeuAvatar, TypingBubble } from "./ChatBubble";
 import ChatInput from "./ChatInput";
 import ChatProductCard from "./ChatProductCard";
 
@@ -27,17 +26,16 @@ type Saved = { messages: Message[]; context: ChatContext | null; constraints: Co
 const STORAGE_KEY = "neusearch.chat.v2";
 
 const STARTERS = [
-  "Leggings for yoga under ₹2,000",
-  "Breathable sports bra",
-  "Shorts for running",
-  "Matching co-ord sets",
+  { emoji: "🧘", text: "Leggings for yoga under ₹2,000" },
+  { emoji: "🏃", text: "Breathable sports bra for running" },
+  { emoji: "☀️", text: "Shorts for hot weather" },
+  { emoji: "✨", text: "Matching co-ord sets" },
 ];
 
 const welcome = (): Message => ({
   id: "welcome",
   role: "bot",
-  text: "Hi! Tell me what you're shopping for in your own words — the activity, fit, fabric or budget — and I'll find matching activewear. You can then say things like \"cheaper\" or \"only shorts\".",
-  suggestions: STARTERS,
+  text: "Hey! I'm Neu, your activewear stylist. Tell me what you're shopping for — the activity, the fit, the fabric or your budget — and I'll pull out the best matches. You can steer me any time with things like \"cheaper\" or \"only shorts\".",
 });
 
 let counter = 0;
@@ -46,7 +44,8 @@ const newId = () => `${Date.now()}-${counter++}`;
 function load(): Saved | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Saved) : null;
+    const saved = raw ? (JSON.parse(raw) as Saved) : null;
+    return saved?.messages?.length ? saved : null;
   } catch {
     return null;
   }
@@ -70,28 +69,18 @@ function filterChips(c: Constraints | null): string[] {
   return chips;
 }
 
-export default function ChatWindow() {
-  const [messages, setMessages] = useState<Message[]>(() => [welcome()]);
-  const [context, setContext] = useState<ChatContext | null>(null);
-  const [constraints, setConstraints] = useState<Constraints | null>(null);
+function ChatWindowInner() {
+  // Rendered on the client only (see the dynamic export), so storage can be read during init.
+  const [initial] = useState(load);
+  const [messages, setMessages] = useState<Message[]>(() => initial?.messages ?? [welcome()]);
+  const [context, setContext] = useState<ChatContext | null>(initial?.context ?? null);
+  const [constraints, setConstraints] = useState<Constraints | null>(initial?.constraints ?? null);
   const [loading, setLoading] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Restore the conversation after a refresh (client only, so SSR markup stays stable).
   useEffect(() => {
-    const saved = load();
-    if (saved?.messages?.length) {
-      setMessages(saved.messages);
-      setContext(saved.context);
-      setConstraints(saved.constraints);
-    }
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (hydrated) save({ messages, context, constraints });
-  }, [hydrated, messages, context, constraints]);
+    save({ messages, context, constraints });
+  }, [messages, context, constraints]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -113,7 +102,7 @@ export default function ChatWindow() {
       const detail = err instanceof Error ? err.message : "Something went wrong.";
       setMessages((prev) => [
         ...prev,
-        { id: newId(), role: "bot", error: true, retry: query, text: `${detail} Please try again.` },
+        { id: newId(), role: "bot", error: true, retry: query, text: `Sorry, I hit a snag: ${detail}` },
       ]);
     } finally {
       setLoading(false);
@@ -137,17 +126,32 @@ export default function ChatWindow() {
 
   const lastBotId = [...messages].reverse().find((m) => m.role === "bot")?.id;
   const chips = filterChips(constraints);
+  const fresh = messages.length === 1 && !loading;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
-        <h1 className="text-sm font-semibold text-gray-900">Shopping assistant</h1>
-        <Button variant="ghost" className="px-2 py-1 text-xs" onClick={reset} disabled={loading}>
-          New chat
-        </Button>
+    <div className="flex h-full flex-col overflow-hidden rounded-3xl bg-white shadow-xl shadow-brand-100/60 ring-1 ring-gray-100">
+      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <NeuAvatar className="h-10 w-10 text-sm" />
+          <div>
+            <h1 className="text-sm font-bold text-gray-900">Neu</h1>
+            <p className="flex items-center gap-1.5 text-xs text-gray-500">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
+              Your activewear stylist
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={reset}
+          disabled={loading || fresh}
+          className="rounded-full px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200 transition hover:bg-brand-50 hover:text-brand-700 hover:ring-brand-200 disabled:opacity-40"
+        >
+          ↺ New chat
+        </button>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite" aria-busy={loading}>
+      <div className="flex-1 space-y-5 overflow-y-auto bg-gradient-to-b from-brand-50/40 to-accent-50/30 px-4 py-5" aria-live="polite" aria-busy={loading}>
         {messages.map((m) => {
           if (m.role === "user") {
             return (
@@ -164,13 +168,17 @@ export default function ChatWindow() {
               </ChatBubble>
 
               {m.error && m.retry && (
-                <Button variant="secondary" className="ml-1 px-3 py-1 text-xs" onClick={() => retry(m.retry!, m.id)}>
-                  Retry
-                </Button>
+                <button
+                  type="button"
+                  onClick={() => retry(m.retry!, m.id)}
+                  className="ml-10 rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-red-700 ring-1 ring-red-200 hover:bg-red-50"
+                >
+                  ↻ Try again
+                </button>
               )}
 
               {m.products && m.products.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:ml-10 sm:grid-cols-3 lg:grid-cols-4">
                   {m.products.map((p) => (
                     <ChatProductCard key={p.product_id} product={p} />
                   ))}
@@ -178,13 +186,13 @@ export default function ChatWindow() {
               )}
 
               {isLast && m.suggestions && m.suggestions.length > 0 && (
-                <div className="flex flex-wrap gap-2" aria-label="Suggested replies">
+                <div className="flex flex-wrap gap-2 sm:ml-10" aria-label="Suggested replies">
                   {m.suggestions.map((s) => (
                     <button
                       key={s}
                       type="button"
                       onClick={() => (s === "Start over" ? reset() : send(s))}
-                      className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      className="rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200 transition hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                     >
                       {s}
                     </button>
@@ -195,23 +203,42 @@ export default function ChatWindow() {
           );
         })}
 
-        {loading && (
-          <div className="pl-1">
-            <Spinner label="Finding products" />
+        {fresh && (
+          <div className="grid gap-2 sm:ml-10 sm:grid-cols-2" aria-label="Conversation starters">
+            {STARTERS.map((s) => (
+              <button
+                key={s.text}
+                type="button"
+                onClick={() => send(s.text)}
+                className="flex items-center gap-3 rounded-2xl bg-white p-3 text-left text-sm font-medium text-gray-800 ring-1 ring-gray-100 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-brand-200"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-lg" aria-hidden>
+                  {s.emoji}
+                </span>
+                {s.text}
+              </button>
+            ))}
           </div>
         )}
+
+        {loading && <TypingBubble />}
         <div ref={bottomRef} />
       </div>
 
       {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-3 pt-2 text-xs text-gray-600">
-          <span>Filters:</span>
+        <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-4 pt-2.5 text-xs text-gray-500">
+          <span>Filters</span>
           {chips.map((c) => (
-            <span key={c} className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-800">
+            <span key={c} className="rounded-full bg-accent-50 px-2.5 py-0.5 font-semibold text-accent-700">
               {c}
             </span>
           ))}
-          <button type="button" onClick={() => send("start over")} disabled={loading} className="text-blue-600 hover:underline disabled:opacity-50">
+          <button
+            type="button"
+            onClick={() => send("start over")}
+            disabled={loading}
+            className="font-semibold text-brand-600 hover:underline disabled:opacity-50"
+          >
             Clear
           </button>
         </div>
@@ -221,3 +248,11 @@ export default function ChatWindow() {
     </div>
   );
 }
+
+function ChatSkeleton() {
+  return <div className="h-full animate-pulse rounded-3xl bg-white ring-1 ring-gray-100" aria-hidden />;
+}
+
+/** Client-only: the conversation lives in sessionStorage, which the server can't see. */
+const ChatWindow = dynamic(() => Promise.resolve(ChatWindowInner), { ssr: false, loading: ChatSkeleton });
+export default ChatWindow;

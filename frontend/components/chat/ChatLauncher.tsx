@@ -11,12 +11,11 @@ export default function ChatLauncher() {
   return (
     <Link
       href="/chat"
-      aria-label="Open shopping assistant"
-      title="Ask the shopping assistant"
-      className="fixed bottom-6 right-6 z-30 flex h-14 items-center gap-2 rounded-full bg-blue-600 px-5 text-sm font-medium text-white shadow-lg transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+      aria-label="Chat with Neu, the shopping assistant"
+      className="bg-brand-gradient fixed bottom-5 right-5 z-30 flex h-14 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-xl shadow-brand-200 transition hover:-translate-y-0.5 hover:brightness-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2"
     >
-      <span aria-hidden>💬</span>
-      <span className="hidden sm:inline">Ask the assistant</span>
+      <span aria-hidden className="text-lg">💬</span>
+      <span className="hidden sm:inline">Ask Neu</span>
     </Link>
   );
 }
