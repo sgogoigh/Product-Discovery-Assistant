@@ -10,52 +10,41 @@ The system combines:
 
 
 ## Live Links
-### FrontEnd (Vercel) - Entry point
-`https://product-discovery-assistant-one.vercel.app/`
-### Backend (Railway)
-`jubilant-courtesy-production-fed8.up.railway.app`
+### Frontend (Vercel) - entry point
+https://product-discovery-assistant-one.vercel.app/
+### Backend (Fly.io)
+https://product-discovery-assistant-backend.fly.dev/ (`/health`, `/readyz`, `/metrics`, `/docs`)
 
 ## How to Run the Project Locally
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- npm
-- Virtual environment (recommended)
+- Python 3.12, Node.js 20.9+ (Next.js 16)
+- A Gemini API key, a Pinecone API key, and a Postgres URL (Supabase session pooler)
 
----
-
-### 1. Backend Setup
-
+### 1. Backend
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+python -m venv ../venv && source ../venv/bin/activate   # Windows: run ../venv/Scripts/activate
+pip install -r requirements.txt -r requirements-dev.txt
+uvicorn app.main:app --reload --port 8000
 ```
+Environment variables are listed in [backend/README.md](backend/README.md#configuration).
 
-Run the backend:
-```bash
-uvicorn app.main:app --reload
-```
-
-Backend will be available at:
-```bash
-http://localhost:8000
-```
-
-## Frontend Setup
+### 2. Frontend
 ```bash
 cd frontend
-npm install
-npm run dev
+npm ci
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+```
+Open http://localhost:3000.
+
+### Tests
+```bash
+cd backend && python -m pytest -q        # no network: Gemini/Pinecone are stubbed
+cd frontend && npm run lint && npm run build
 ```
 
-Frontend will be available at:
-```bash
-http://localhost:3000
-```
-Ensure the frontend API base URL points to the backend.
+See [docs/AUDIT.md](docs/AUDIT.md) for the issues found and fixed.
 
 ## System Architecture
 ```pgsql

@@ -1,50 +1,56 @@
-from pydantic import BaseModel, Field
 from typing import List, Optional
 
-# Input schema for creating a product
+from pydantic import BaseModel, ConfigDict, Field
+
+
 class FeatureCreate(BaseModel):
     section: str
-    title: Optional[str]
+    title: Optional[str] = None
     description: str
+
 
 class ProductCreate(BaseModel):
     title: str = Field(..., min_length=2, max_length=255)
-    price: int
-    description: str
-    image_url: str
-    category: str
-    source_url: str
-    features: List[FeatureCreate]
+    price: Optional[float] = Field(default=None, ge=0)
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    category: Optional[str] = Field(default=None, max_length=100)
+    source_url: Optional[str] = None
+    features: List[FeatureCreate] = []
 
-# Output schema for product response
+
 class FeatureOut(BaseModel):
     section: str
-    title: Optional[str]
-    description: str
+    title: Optional[str] = None
+    description: str = ""
+
 
 class ProductOut(BaseModel):
+    """Matches the DB: price, category and URLs are nullable there, so they are here."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     product_id: int
     title: str
-    price: int
-    category: str
-    image_url: str
-    source_url: str
-    features: List[FeatureOut]
-    class Config:
-        from_attributes = True
+    price: Optional[float] = None
+    category: str = ""
+    description: Optional[str] = None
+    image_url: str = ""
+    source_url: str = ""
+    features: List[FeatureOut] = []
+
 
 class FeatureUpdate(BaseModel):
-    section: Optional[str]
-    title: Optional[str]
-    description: Optional[str]
+    section: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+
 
 class ProductUpdate(BaseModel):
-    title: Optional[str] = None
-    price: Optional[int] = None
+    title: Optional[str] = Field(default=None, min_length=2, max_length=255)
+    price: Optional[float] = Field(default=None, ge=0)
     description: Optional[str] = None
-    category: Optional[str] = None
+    category: Optional[str] = Field(default=None, max_length=100)
     image_url: Optional[str] = None
     source_url: Optional[str] = None
-    features: Optional[List[FeatureUpdate]] = None
-    class Config:
-        from_attributes = True
+    features: Optional[List[FeatureCreate]] = None

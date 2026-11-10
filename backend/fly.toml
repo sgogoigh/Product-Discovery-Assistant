@@ -20,3 +20,45 @@ primary_region = 'ams'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 256
+# Fly.io config for the backend. Fly's working directory is `backend/`, so this file
+# and the Dockerfile next to it are used. Secrets (DATABASE_URL, GEMINI_API_KEY,
+# PINECONE_API_KEY, PINECONE_INDEX, optional SENTRY_DSN/ADMIN_API_KEY) are set with
+# `fly secrets set`, never here.
+app = "product-discovery-assistant-backend"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  LOG_FORMAT = "json"
+  WARMUP = "true"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 20
+    hard_limit = 40
+
+  # Liveness only: a database outage must not take the API (and its 503s) offline.
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/health"
+
+[metrics]
+  port = 8080
+  path = "/metrics"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

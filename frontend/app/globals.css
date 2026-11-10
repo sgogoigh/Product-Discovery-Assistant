@@ -1,26 +1,68 @@
 @import "tailwindcss";
 
+/* Light theme only. Brand colours are tokens: bg-brand-500, text-accent-600, etc. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fffaf7;
+  --foreground: #1f1a24;
+  color-scheme: light;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-jakarta);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-brand-50: #fff3ef;
+  --color-brand-100: #ffe3da;
+  --color-brand-200: #ffc6b4;
+  --color-brand-300: #ffa086;
+  --color-brand-400: #ff7a5c;
+  --color-brand-500: #f45b3c;
+  --color-brand-600: #dc4426;
+  --color-brand-700: #b5341c;
+  --color-accent-50: #f5f2ff;
+  --color-accent-100: #ebe5ff;
+  --color-accent-200: #d6caff;
+  --color-accent-400: #9b7dff;
+  --color-accent-500: #7c5cf5;
+  --color-accent-600: #6440e0;
+  --color-accent-700: #5030b8;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+}
+
+.bg-brand-gradient {
+  background-image: linear-gradient(120deg, var(--color-brand-500), #f0477a 55%, var(--color-accent-500));
+}
+
+.text-brand-gradient {
+  background-image: linear-gradient(100deg, var(--color-brand-500), #f0477a 50%, var(--color-accent-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bg-hero {
+  background:
+    radial-gradient(60% 80% at 10% 0%, var(--color-brand-100) 0%, transparent 60%),
+    radial-gradient(50% 70% at 95% 10%, var(--color-accent-100) 0%, transparent 60%),
+    var(--background);
+}
+
+@keyframes typing {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+.typing-dot { animation: typing 1.2s infinite ease-in-out; }
+.typing-dot:nth-child(3) { animation-delay: 0.15s; }
+.typing-dot:nth-child(4) { animation-delay: 0.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot { animation: none; opacity: 0.6; }
 }
