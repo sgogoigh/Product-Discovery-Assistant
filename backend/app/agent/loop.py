@@ -141,17 +141,60 @@ def _suggestions(c: Constraints) -> List[str]:
     return out
 
 
+def _remember(state: ChatState, message: str) -> List[str]:
+    return (state.recent + [message[:200]])[-4:]
+
+
+def _situation(parsed: ParsedMessage, state: ChatState, c: Constraints) -> str:
+    if parsed.price_direction == "lower":
+        return "they asked for cheaper options than the ones shown"
+    if parsed.price_direction == "higher":
+        return "they asked for more premium options"
+    if parsed.action == Action.REFINE:
+        if c.category != state.constraints.category:
+            return f"they switched to {c.category.lower() if c.category else 'all categories'}, keeping their budget"
+        return "they refined the previous results"
+    return "a new search"
+
+
+def _follow_up(c: Constraints) -> str:
+    """Deterministic next question: ask for whatever is still unknown."""
+    if c.max_price is None and c.min_price is None:
+        return "Do you have a budget in mind?"
+    if c.category is None:
+        return "Are you after a particular piece — leggings, a sports bra, shorts or a top?"
+    return "Want me to narrow it down by fit, fabric or activity?"
+
+
+def _template_reply(products: List[Dict], c: Constraints, query: str, situation: str) -> str:
+    """Human-sounding fallback when the LLM is off or failed. Same input, same words."""
+    n = len(products)
+    top = products[0]["title"]
+    what = describe(c)
+    if situation.startswith("they asked for cheaper"):
+        lead = f"Sure — here {'is' if n == 1 else 'are'} {n} more affordable {what}, cheapest first."
+    elif situation.startswith("they switched"):
+        lead = f"Switching it up — here are {n} {what}."
+    elif situation.startswith("they refined"):
+        lead = f"Got it, I've narrowed it down to {n} {what}."
+    else:
+        lead = f"Nice — I found {n} {what} for \"{query}\"."
+    return f"{lead} The {top} is a strong match. {_follow_up(c)}"
+
+
 def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
     t0 = time.perf_counter()
     parsed = understand(message, state)
     logger.info("[AGENT] action=%s source=%s parse_ms=%d parsed=%s", parsed.action.value, parsed.source,
                 (time.perf_counter() - t0) * 1000, parsed.model_dump(exclude={"reply"}, exclude_none=True))
+    recent = _remember(state, message)
 
     if parsed.action == Action.RESET:
-        return AgentResult(parsed.reply or "Cleared. What are you shopping for?", state=ChatState(),
+        return AgentResult(parsed.reply or "Fresh start! What are you shopping for today?", state=ChatState(),
                            suggestions=STARTER_SUGGESTIONS)
     if parsed.action in (Action.GREETING, Action.CLARIFY):
-        return AgentResult(parsed.reply or GREETING_REPLY, state=state, suggestions=STARTER_SUGGESTIONS)
+        return AgentResult(parsed.reply or GREETING_REPLY, state=state.model_copy(update={"recent": recent}),
+                           suggestions=STARTER_SUGGESTIONS)
 
     query, c, budget, sort_asc = resolve(parsed, state)
     t1 = time.perf_counter()
@@ -159,22 +202,24 @@ def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
     logger.info("[AGENT] retrieve_ms=%d hits=%d", (time.perf_counter() - t1) * 1000, len(results))
 
     if not results:
-        return _empty(query, c, parsed, state)
+        empty = _empty(query, c, parsed, state)
+        empty.state = empty.state.model_copy(update={"recent": recent})
+        return empty
 
     if sort_asc:
         results = sort_by_price(results[: limit * 2], ascending=True)
     products = diversify(results, limit=limit)
 
+    situation = _situation(parsed, state, c)
     t2 = time.perf_counter()
-    reply = llm_reply(message, describe(c), products)
+    reply = llm_reply(message, describe(c), products, recent=state.recent, situation=situation)
     logger.info("[AGENT] reply_ms=%d llm=%s", (time.perf_counter() - t2) * 1000, reply is not None)
     if reply:
         reasons = {r.product_id: r.why for r in reply.reasons}
         text = reply.message.strip()
     else:
         reasons = {}
-        text = (f"Here are some more affordable {describe(c)}." if sort_asc
-                else f"Here are {describe(c)} matching \"{query}\".")
+        text = _template_reply(products, c, query, situation)
     for p in products:
         p["explanation"] = reasons.get(p["product_id"]) or _fallback_reason(p)
 
@@ -183,6 +228,7 @@ def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
         constraints=c,
         budget=budget,
         shown=[ShownProduct(product_id=p["product_id"], price=p.get("price")) for p in products],
+        recent=recent,
     )
     return AgentResult(text, products, new_state, _suggestions(c))
 
@@ -190,8 +236,9 @@ def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
 def _empty(query: str, c: Constraints, parsed: ParsedMessage, state: ChatState) -> AgentResult:
     """No hits: say why, using what *does* exist, and keep the previous state."""
     if parsed.price_direction == "lower" and state.shown:
-        return AgentResult("Those are already the most affordable matches I have.", state=state,
-                           suggestions=["Start over"])
+        return AgentResult("Those are already the most affordable matches I have for this — "
+                           "want me to look at a different category instead?", state=state,
+                           suggestions=["Only shorts", "Start over"])
 
     if c.min_price is not None or c.max_price is not None:
         nearest = retrieve_products(query, category=c.category)
@@ -199,18 +246,18 @@ def _empty(query: str, c: Constraints, parsed: ParsedMessage, state: ChatState) 
             prices = sorted(p["price"] for p in nearest if p.get("price") is not None)
             label = c.category.lower() if c.category else "matching products"
             if prices and c.max_price is not None and prices[0] > c.max_price:
-                msg = (f"I couldn't find {describe(c)}. The most affordable {label} "
-                       f"start at {rupees(prices[0])}.")
+                msg = (f"Hmm, I couldn't find {describe(c)}. The most affordable {label} "
+                       f"start at {rupees(prices[0])} — want to see those?")
                 return AgentResult(msg, state=state,
                                    suggestions=[f"Show {label} under {rupees(_round_up(prices[0]))}", "Start over"])
-            msg = f"I couldn't find {describe(c)}. Try a different budget?"
+            msg = f"Hmm, nothing fits {describe(c)} right now. Could you stretch the budget a little?"
             return AgentResult(msg, state=state, suggestions=["Start over"])
 
     if c.category:
-        return AgentResult(f"I couldn't find {c.category.lower()} matching \"{query}\". Want to try other categories?",
-                           state=state, suggestions=["Start over"])
-    return AgentResult(f"I couldn't find anything matching \"{query}\". Try describing the product differently.",
-                       state=state, suggestions=STARTER_SUGGESTIONS)
+        return AgentResult(f"I couldn't find {c.category.lower()} for \"{query}\". "
+                           "Want me to look across other categories?", state=state, suggestions=["Start over"])
+    return AgentResult(f"I couldn't find anything for \"{query}\" — could you describe it another way, "
+                       "like the activity or the fit you want?", state=state, suggestions=STARTER_SUGGESTIONS)
 
 
 def _median(values: List[float]) -> float:

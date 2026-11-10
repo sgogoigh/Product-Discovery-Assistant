@@ -50,7 +50,9 @@ def test_repeated_cheaper_converges(client):
             break
     assert body["results"] == []
     assert "most affordable" in body["message"]
-    assert body["context"] == prev["context"]            # previous state kept
+    # previous results and filters kept (only the message memory grows)
+    assert body["context"]["shown"] == prev["context"]["shown"]
+    assert body["context"]["constraints"] == prev["context"]["constraints"]
     assert [p["price"] for p in prev["results"]] == [1299.0]
 
 
@@ -84,6 +86,21 @@ def test_reset_clears_context(client):
     body = post(client, "start over", first["context"])
     assert body["context"]["last_query"] is None
     assert body["context"]["constraints"] == {"category": None, "min_price": None, "max_price": None}
+
+
+def test_replies_are_deterministic_and_conversational(client):
+    a = post(client, "leggings under 2000")
+    b = post(client, "leggings under 2000")
+    assert a["message"] == b["message"]                  # same input, same words
+    assert a["message"].rstrip().endswith("?")           # ends with a follow-up question
+    assert a["results"][0]["title"] in a["message"]      # names a standout pick
+
+
+def test_recent_messages_are_remembered(client):
+    a = post(client, "hello")
+    b = post(client, "leggings", a["context"])
+    c = post(client, "cheaper", b["context"])
+    assert c["context"]["recent"] == ["hello", "leggings", "cheaper"]
 
 
 def test_request_bounds(client):

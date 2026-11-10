@@ -6,6 +6,8 @@ Set CHAT_LLM=off to disable the LLM entirely.
 """
 import os
 import re
+import threading
+from collections import OrderedDict
 from typing import Dict, List, Literal, Optional
 
 from google.genai import types
@@ -17,17 +19,47 @@ from app.utils.logger import logger
 
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-2.5-flash")
 LLM_TIMEOUT_MS = int(os.getenv("CHAT_LLM_TIMEOUT_MS", "8000"))  # then fall back to rules/templates
+LLM_SEED = int(os.getenv("CHAT_LLM_SEED", "7"))
 
 
 def llm_enabled() -> bool:
     return os.getenv("CHAT_LLM", "on").lower() not in {"off", "0", "false"} and bool(os.getenv("GEMINI_API_KEY"))
 
 
+_CACHE: "OrderedDict[tuple, BaseModel]" = OrderedDict()
+_CACHE_SIZE = 512
+_cache_lock = threading.Lock()
+
+
 def _generate(prompt: str, schema: type[BaseModel], max_tokens: int):
+    """Cached: the same prompt always returns the same (first successful) output, so a
+    repeated conversation gets identical words even though the API itself is not
+    perfectly reproducible. Failures are not cached."""
+    key = (schema.__name__, prompt)
+    with _cache_lock:
+        if key in _CACHE:
+            _CACHE.move_to_end(key)
+            return _CACHE[key].model_copy(deep=True)
+    out = _call(prompt, schema, max_tokens)
+    if isinstance(out, schema):
+        with _cache_lock:
+            _CACHE[key] = out.model_copy(deep=True)
+            while len(_CACHE) > _CACHE_SIZE:
+                _CACHE.popitem(last=False)
+    else:
+        logger.warning("llm %s: response did not parse", schema.__name__)
+    return out
+
+
+def _call(prompt: str, schema: type[BaseModel], max_tokens: int):
+    # Deterministic decoding: greedy (temperature 0, top_k 1) with a fixed seed.
+    # Warmth comes from the prompt.
     cfg: Dict = dict(
         response_mime_type="application/json",
         response_schema=schema,
-        temperature=0.2,
+        temperature=0.0,
+        top_k=1,
+        seed=LLM_SEED,
         max_output_tokens=max_tokens,
         http_options=types.HttpOptions(timeout=LLM_TIMEOUT_MS, retry_options=types.HttpRetryOptions(attempts=1)),
     )
@@ -50,10 +82,11 @@ class _ParseOut(BaseModel):
     reply: Optional[str] = Field(default=None, description="only for GREETING or CLARIFY")
 
 
-_PARSE_PROMPT = """You route messages for a shopping assistant of an Indian activewear store (prices in ₹).
+_PARSE_PROMPT = """You route messages for Neu, a friendly stylist at an Indian activewear store (prices in rupees).
 Allowed categories: {categories}.
 
 Conversation so far:
+- recent shopper messages (oldest first): {recent}
 - previous search: {last_query}
 - active filters: {constraints}
 - prices of products currently shown: {shown}
@@ -61,7 +94,8 @@ Conversation so far:
 User message: \"\"\"{message}\"\"\"
 
 Decide:
-- GREETING: hello, thanks, small talk, or questions about you. Write a short friendly `reply` that steers to shopping.
+- GREETING: hello, thanks, small talk, or questions about you. Write a warm, natural 1-2 sentence `reply`
+  (like a friendly shop assistant, not a bot) that gently steers back to what they might shop for.
 - RESET: user wants to start over.
 - CLARIFY: ONLY when there is nothing at all to search for (e.g. "I need something", "help me shop"). Ask ONE short question in `reply`.
   Anything with a style, activity, feeling, fabric or feature ("cute gym outfit", "with pockets", "for hot weather") is a SEARCH.
@@ -81,6 +115,7 @@ def llm_parse(message: str, state: ChatState) -> Optional[ParsedMessage]:
         return None
     prompt = _PARSE_PROMPT.format(
         categories=", ".join(CATEGORIES),
+        recent=" | ".join(state.recent) or "none",
         last_query=state.last_query or "none",
         constraints=state.constraints.model_dump(exclude_none=True) or "none",
         shown=[p.price for p in state.shown] or "none",
@@ -121,29 +156,43 @@ class _ReplyOut(BaseModel):
     reasons: List[_Why] = []
 
 
-_REPLY_PROMPT = """You are a friendly shopping assistant for an Indian activewear store.
-The user asked: \"\"\"{message}\"\"\"
+_REPLY_PROMPT = """You are Neu, a warm, knowledgeable stylist at an Indian activewear store, chatting with a shopper.
+Talk like a helpful friend in the shop: natural, specific, upbeat, never salesy or robotic.
+
+Recent messages from the shopper (oldest first): {recent}
+Latest message: \"\"\"{message}\"\"\"
+What happened this turn: {situation}
 Active filters: {constraints}
 
-These products were retrieved (best match first):
+Products found (best match first):
 {products}
 
 Write:
-- message: 1-2 short sentences introducing the results. Mention the filters naturally. No lists, no prices per item, no markdown.
-  Write any amount as "Rs 2,000" (never use the rupee symbol).
-- reasons: for EACH product, one short phrase (max 12 words) on why it fits, grounded ONLY in its snippet.
-Never invent features that are not in the snippet. If the snippet does not cover what the user asked,
-say what the product DOES offer instead. Never mention "snippet", "data" or what is missing.
+- message: 2-3 short sentences, plain text, no markdown or lists.
+  1) Acknowledge what they asked in your own words (refer back to earlier messages if relevant).
+  2) Point out ONE standout pick by name and why, using only its details below.
+  3) End with ONE short, specific follow-up question that helps narrow things down
+     (fit, fabric, activity, budget or category), unless they just said thanks.
+  Write any amount as "Rs 2,000" (never the rupee symbol). Don't list every product or price.
+- reasons: for EACH product, one short, friendly phrase (max 14 words) on why it suits them,
+  grounded ONLY in its details. Never invent features. If its details don't cover what they asked,
+  say what it does offer. Never mention "snippet", "details", "data" or what is missing.
 """
 
 
-def llm_reply(message: str, filters: str, products: List[dict]) -> Optional[_ReplyOut]:
+def llm_reply(
+    message: str,
+    filters: str,
+    products: List[dict],
+    recent: Optional[List[str]] = None,
+    situation: str = "a new search",
+) -> Optional[_ReplyOut]:
     """`filters` is already human-readable, e.g. 'leggings under ₹2,000'."""
     if not llm_enabled() or not products:
         return None
 
     def price(p: dict) -> str:
-        return f"₹{p['price']:,.0f}" if isinstance(p.get("price"), (int, float)) else "price n/a"
+        return f"Rs {p['price']:,.0f}" if isinstance(p.get("price"), (int, float)) else "price n/a"
 
     lines = [
         f"- id={p['product_id']} | {p['title']} | {p.get('category', '')} | {price(p)} | "
@@ -151,8 +200,10 @@ def llm_reply(message: str, filters: str, products: List[dict]) -> Optional[_Rep
         for p in products
     ]
     prompt = _REPLY_PROMPT.format(
+        recent=" | ".join(r.replace('"""', "'''") for r in (recent or [])) or "none",
         message=message.replace('"""', "'''")[:500],
-        constraints=filters,
+        situation=situation,
+        constraints=filters.replace("₹", "Rs "),
         products="\n".join(lines),
     )
     try:
@@ -180,4 +231,4 @@ def _clean(text: str) -> str:
 
 def _looks_broken(text: str) -> bool:
     # JSON-mode output occasionally mangles currency/quotes: 'under ","2,000'
-    return bool(re.search(r'[",]{2,}|\\u|\{|\}', text))
+    return bool(re.search(r'",|,"|""|,,|\\u|\{|\}', text))

@@ -97,13 +97,13 @@ _REFINE_LEAD = r"^\s*(only|just|show (me )?(only|the ones|those|them)|what about
 _FILLER = r"\b(show|me|find|get|i|want|need|looking|for|some|something|please|any|the|a|an|ones?|those|them|that|are|is|in|with|only|just|what|about|how|can|you|give|do|have|got|it|but|make|same|instead|to|of|and|my|options?|items?|products?|stuff)\b"
 
 GREETING_REPLY = (
-    "Hi! I can help you find activewear — leggings, sports bras, shorts, tops, co-ord sets and more. "
-    "Tell me what you're after, e.g. \"high-waisted leggings under ₹2,000\"."
+    "Hey there! I'm Neu, your activewear stylist. What are you shopping for today — "
+    "something for yoga, running, the gym, or just everyday comfort?"
 )
-THANKS_REPLY = "Happy to help! Want me to look for anything else?"
+THANKS_REPLY = "Anytime! Shout if you'd like me to find something else."
 HELP_REPLY = (
-    "Describe what you want in your own words — the activity, fit, fabric or budget. "
-    "Then refine: \"cheaper\", \"only shorts\", \"under ₹1,500\", or \"start over\"."
+    "Just tell me what you need like you'd tell a friend — the activity, the fit, the fabric or your budget. "
+    "Then steer me: \"cheaper\", \"only shorts\", \"under ₹1,500\", or \"start over\"."
 )
 
 
@@ -119,7 +119,7 @@ def parse_rules(message: str, state: ChatState) -> ParsedMessage:
     has_context = bool(state.last_query)
 
     if re.search(_RESET, low):
-        return ParsedMessage(action=Action.RESET, reply="Cleared. What are you shopping for?")
+        return ParsedMessage(action=Action.RESET, reply="Fresh start! What are you shopping for today?")
     if re.search(_GREETING, low):
         return ParsedMessage(action=Action.GREETING, reply=GREETING_REPLY)
     if re.search(_THANKS, low):
@@ -153,7 +153,8 @@ def parse_rules(message: str, state: ChatState) -> ParsedMessage:
             return ParsedMessage(action=Action.SEARCH, search_text="activewear", min_price=lo, max_price=hi)
         return ParsedMessage(
             action=Action.CLARIFY,
-            reply="What kind of product are you looking for? For example leggings, a sports bra, shorts or a top.",
+            reply="Happy to help! What are you shopping for — leggings, a sports bra, shorts, a top? "
+                  "Or just tell me the activity and I'll suggest something.",
         )
 
     return ParsedMessage(

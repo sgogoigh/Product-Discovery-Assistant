@@ -55,6 +55,8 @@ class ChatState(BaseModel):
     # switching category goes back to this.
     budget: Constraints = Field(default_factory=Constraints)
     shown: List[ShownProduct] = Field(default_factory=list, max_length=50)
+    # Last few shopper messages, so replies can refer back naturally.
+    recent: List[str] = Field(default_factory=list, max_length=10)
 
 
 class ParsedMessage(BaseModel):
