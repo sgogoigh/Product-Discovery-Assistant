@@ -19,7 +19,16 @@ def get_engine() -> Engine:
     url = os.getenv("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set")
-    return create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=5, pool_recycle=300)
+    if url.startswith("sqlite"):
+        return create_engine(url)
+    return create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=5,
+        pool_recycle=300,
+        connect_args={"connect_timeout": 5},  # fail fast when Supabase is paused
+    )
 
 
 @lru_cache(maxsize=1)
