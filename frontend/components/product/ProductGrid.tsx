@@ -1,50 +1,32 @@
-import type { Product, ChatProductCard } from "@/lib/types";
+import type { ChatProductCard, Product } from "@/lib/types";
 import ProductCard from "@/components/product/ProductCard";
 import ChatProductCardComponent from "@/components/chat/ChatProductCard";
 
-type CatalogProps = {
-  products: Product[];
-  variant?: "catalog";
-};
+type Props =
+  | { products: Product[]; variant?: "catalog"; emptyMessage?: string }
+  | { products: ChatProductCard[]; variant: "chat"; emptyMessage?: string };
 
-type ChatProps = {
-  products: ChatProductCard[];
-  variant: "chat";
-};
-
-type Props = CatalogProps | ChatProps;
+const GRID = "grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4";
 
 export default function ProductGrid(props: Props) {
-  if (!props.products || props.products.length === 0) {
-    return (
-      <p className="text-center text-sm text-gray-500">
-        No products available.
-      </p>
-    );
+  if (!props.products.length) {
+    return <p className="py-8 text-center text-sm text-gray-500">{props.emptyMessage ?? "No products available."}</p>;
   }
 
-  // CHAT PRODUCTS
   if (props.variant === "chat") {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className={GRID}>
         {props.products.map((p) => (
-          <ChatProductCardComponent
-            key={p.product_id}
-            product={p}
-          />
+          <ChatProductCardComponent key={p.product_id} product={p} />
         ))}
       </div>
     );
   }
 
-  // CATALOG PRODUCTS
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className={GRID}>
       {props.products.map((p) => (
-        <ProductCard
-          key={p.product_id}
-          product={p}
-        />
+        <ProductCard key={p.product_id} product={p} />
       ))}
     </div>
   );

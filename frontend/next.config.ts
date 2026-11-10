@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    // Product photos come from the scraped store's CDN only.
+    remotePatterns: [{ protocol: "https", hostname: "hunnit.com", pathname: "/cdn/**" }],
+  },
 };
 
 export default nextConfig;
