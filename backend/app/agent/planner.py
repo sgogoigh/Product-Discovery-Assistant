@@ -5,6 +5,7 @@ the caller then falls back to the deterministic rules / templates.
 Set CHAT_LLM=off to disable the LLM entirely.
 """
 import os
+import re
 from typing import Dict, List, Literal, Optional
 
 from google.genai import types
@@ -15,6 +16,7 @@ from app.rag.embeddings import get_client
 from app.utils.logger import logger
 
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-2.5-flash")
+LLM_TIMEOUT_MS = int(os.getenv("CHAT_LLM_TIMEOUT_MS", "8000"))  # then fall back to rules/templates
 
 
 def llm_enabled() -> bool:
@@ -27,6 +29,7 @@ def _generate(prompt: str, schema: type[BaseModel], max_tokens: int):
         response_schema=schema,
         temperature=0.2,
         max_output_tokens=max_tokens,
+        http_options=types.HttpOptions(timeout=LLM_TIMEOUT_MS, retry_options=types.HttpRetryOptions(attempts=1)),
     )
     if CHAT_MODEL.startswith("gemini-2.5-flash"):
         cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=0)  # latency
@@ -60,7 +63,8 @@ User message: \"\"\"{message}\"\"\"
 Decide:
 - GREETING: hello, thanks, small talk, or questions about you. Write a short friendly `reply` that steers to shopping.
 - RESET: user wants to start over.
-- CLARIFY: a shopping request too vague to search (e.g. "I need something"). Ask ONE short question in `reply`.
+- CLARIFY: ONLY when there is nothing at all to search for (e.g. "I need something", "help me shop"). Ask ONE short question in `reply`.
+  Anything with a style, activity, feeling, fabric or feature ("cute gym outfit", "with pockets", "for hot weather") is a SEARCH.
 - REFINE: adjusts the current results (cheaper, a price limit, a colour, only a category, "with pockets"). Only if there is a previous search.
 - SEARCH: any new product request.
 
@@ -126,26 +130,54 @@ These products were retrieved (best match first):
 
 Write:
 - message: 1-2 short sentences introducing the results. Mention the filters naturally. No lists, no prices per item, no markdown.
+  Write any amount as "Rs 2,000" (never use the rupee symbol).
 - reasons: for EACH product, one short phrase (max 12 words) on why it fits, grounded ONLY in its snippet.
-Never invent features that are not in the snippet.
+Never invent features that are not in the snippet. If the snippet does not cover what the user asked,
+say what the product DOES offer instead. Never mention "snippet", "data" or what is missing.
 """
 
 
-def llm_reply(message: str, constraints: dict, products: List[dict]) -> Optional[_ReplyOut]:
+def llm_reply(message: str, filters: str, products: List[dict]) -> Optional[_ReplyOut]:
+    """`filters` is already human-readable, e.g. 'leggings under ₹2,000'."""
     if not llm_enabled() or not products:
         return None
+
+    def price(p: dict) -> str:
+        return f"₹{p['price']:,.0f}" if isinstance(p.get("price"), (int, float)) else "price n/a"
+
     lines = [
-        f"- id={p['product_id']} | {p['title']} | {p.get('category', '')} | ₹{p.get('price')} | snippet: {p.get('text', '')[:220]}"
+        f"- id={p['product_id']} | {p['title']} | {p.get('category', '')} | {price(p)} | "
+        f"snippet: {(p.get('evidence') or p.get('text') or '')[:220]}"
         for p in products
     ]
     prompt = _REPLY_PROMPT.format(
         message=message.replace('"""', "'''")[:500],
-        constraints=constraints or "none",
+        constraints=filters,
         products="\n".join(lines),
     )
     try:
         out = _generate(prompt, _ReplyOut, 600)
-        return out if isinstance(out, _ReplyOut) and out.message.strip() else None
     except Exception as exc:
         logger.warning("llm_reply failed: %s", str(exc)[:200])
         return None
+    if not isinstance(out, _ReplyOut):
+        return None
+    out.message = _clean(out.message)
+    for r in out.reasons:
+        r.why = _clean(r.why)
+    if not out.message or _looks_broken(out.message):
+        logger.warning("llm_reply discarded: %r", out.message[:120])
+        return None
+    out.reasons = [r for r in out.reasons
+                   if r.why and not _looks_broken(r.why) and not re.search(r"snippet|no mention", r.why, re.I)]
+    return out
+
+
+def _clean(text: str) -> str:
+    text = re.sub(r"\b(?:Rs\.?|INR)\s?(?=\d)", "₹", text.strip())
+    return re.sub(r"(?<=\d)\.0\b", "", text)
+
+
+def _looks_broken(text: str) -> bool:
+    # JSON-mode output occasionally mangles currency/quotes: 'under ","2,000'
+    return bool(re.search(r'[",]{2,}|\\u|\{|\}', text))

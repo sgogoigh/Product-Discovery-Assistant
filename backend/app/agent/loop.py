@@ -1,4 +1,6 @@
 """One conversational turn: understand -> resolve constraints -> retrieve -> reply."""
+import math
+import time
 from dataclasses import dataclass, field
 from typing import Dict, List
 
@@ -52,8 +54,14 @@ def describe(c: Constraints) -> str:
 
 def understand(message: str, state: ChatState) -> ParsedMessage:
     rules = parse_rules(message, state)
-    # Unambiguous cases never need the LLM.
-    if rules.action in (Action.GREETING, Action.RESET) or rules.price_direction != "none":
+    # Unambiguous cases never need the LLM (saves ~1-2 s per turn).
+    confident = (
+        rules.action in (Action.GREETING, Action.RESET)
+        or rules.price_direction != "none"
+        or (rules.action in (Action.SEARCH, Action.REFINE)
+            and (rules.category is not None or rules.min_price is not None or rules.max_price is not None))
+    )
+    if confident:
         return rules
     parsed = llm_parse(message, state)
     if parsed is None:
@@ -63,22 +71,29 @@ def understand(message: str, state: ChatState) -> ParsedMessage:
         parsed.min_price, parsed.max_price = rules.min_price, rules.max_price
     if parsed.action in (Action.SEARCH, Action.REFINE) and not parsed.search_text and not parsed.category:
         parsed.search_text = rules.search_text
+    # The LLM over-asks; if the message has real content, search it.
+    if parsed.action == Action.CLARIFY and rules.action in (Action.SEARCH, Action.REFINE) \
+            and len(rules.search_text.split()) >= 2:
+        return rules
     return parsed
 
 
-def resolve(parsed: ParsedMessage, state: ChatState) -> tuple[str, Constraints, bool]:
-    """Return (search query, constraints, sort_by_price_asc)."""
+def resolve(parsed: ParsedMessage, state: ChatState) -> tuple[str, Constraints, Constraints, bool]:
+    """Return (search query, constraints, stated budget, sort_by_price_asc)."""
     shown_prices = [p.price for p in state.shown if p.price is not None]
 
     if parsed.action == Action.REFINE:
         c = state.constraints.model_copy()
+        budget = state.budget.model_copy()
         new_category = parsed.category is not None and parsed.category != c.category
-        if parsed.category:
+        if new_category:
+            # A "cheaper" ceiling was relative to the old category's prices.
+            c.min_price, c.max_price = budget.min_price, budget.max_price
             c.category = parsed.category
         if parsed.min_price is not None:
-            c.min_price = parsed.min_price
+            c.min_price = budget.min_price = parsed.min_price
         if parsed.max_price is not None:
-            c.max_price = parsed.max_price
+            c.max_price = budget.max_price = parsed.max_price
         base = state.last_query or ""
         if new_category and parsed.search_text:
             query = parsed.search_text
@@ -86,6 +101,7 @@ def resolve(parsed: ParsedMessage, state: ChatState) -> tuple[str, Constraints, 
             query = f"{base} {parsed.search_text}".strip() or base
     else:
         c = Constraints(category=parsed.category, min_price=parsed.min_price, max_price=parsed.max_price)
+        budget = Constraints(min_price=parsed.min_price, max_price=parsed.max_price)
         query = parsed.search_text or (parsed.category or "activewear")
 
     sort_asc = False
@@ -94,7 +110,7 @@ def resolve(parsed: ParsedMessage, state: ChatState) -> tuple[str, Constraints, 
         if shown_prices and parsed.max_price is None:
             # Below the median of what is on screen: always strictly cheaper than the
             # typical result, and repeated "cheaper" converges on the cheapest item.
-            c.max_price = _median(shown_prices) - 1
+            c.max_price = float(math.ceil(_median(shown_prices)) - 1)
             c.min_price = None
     elif parsed.price_direction == "higher" and shown_prices and parsed.min_price is None:
         c.min_price = max(shown_prices) + 1
@@ -102,12 +118,12 @@ def resolve(parsed: ParsedMessage, state: ChatState) -> tuple[str, Constraints, 
 
     if c.min_price is not None and c.max_price is not None and c.min_price > c.max_price:
         c.min_price, c.max_price = c.max_price, c.min_price
-    return query, c, sort_asc
+    return query, c, budget, sort_asc
 
 
 def _fallback_reason(p: Dict) -> str:
-    label = _FIELD_LABELS.get(p.get("field", ""), "details")
-    snippet = (p.get("text") or "").strip()
+    label = _FIELD_LABELS.get(p.get("evidence_field") or p.get("field", ""), "details")
+    snippet = (p.get("evidence") or p.get("text") or "").strip()
     if label == "name" or not snippet:
         return f"Matches your search by {label}."
     return f"Matched on {label}: {snippet[:90].rstrip()}{'…' if len(snippet) > 90 else ''}"
@@ -126,9 +142,10 @@ def _suggestions(c: Constraints) -> List[str]:
 
 
 def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
+    t0 = time.perf_counter()
     parsed = understand(message, state)
-    logger.info("[AGENT] action=%s source=%s parsed=%s", parsed.action.value, parsed.source,
-                parsed.model_dump(exclude={"reply"}, exclude_none=True))
+    logger.info("[AGENT] action=%s source=%s parse_ms=%d parsed=%s", parsed.action.value, parsed.source,
+                (time.perf_counter() - t0) * 1000, parsed.model_dump(exclude={"reply"}, exclude_none=True))
 
     if parsed.action == Action.RESET:
         return AgentResult(parsed.reply or "Cleared. What are you shopping for?", state=ChatState(),
@@ -136,8 +153,10 @@ def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
     if parsed.action in (Action.GREETING, Action.CLARIFY):
         return AgentResult(parsed.reply or GREETING_REPLY, state=state, suggestions=STARTER_SUGGESTIONS)
 
-    query, c, sort_asc = resolve(parsed, state)
+    query, c, budget, sort_asc = resolve(parsed, state)
+    t1 = time.perf_counter()
     results = retrieve_products(query, category=c.category, min_price=c.min_price, max_price=c.max_price)
+    logger.info("[AGENT] retrieve_ms=%d hits=%d", (time.perf_counter() - t1) * 1000, len(results))
 
     if not results:
         return _empty(query, c, parsed, state)
@@ -146,7 +165,9 @@ def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
         results = sort_by_price(results[: limit * 2], ascending=True)
     products = diversify(results, limit=limit)
 
-    reply = llm_reply(message, c.model_dump(exclude_none=True), products)
+    t2 = time.perf_counter()
+    reply = llm_reply(message, describe(c), products)
+    logger.info("[AGENT] reply_ms=%d llm=%s", (time.perf_counter() - t2) * 1000, reply is not None)
     if reply:
         reasons = {r.product_id: r.why for r in reply.reasons}
         text = reply.message.strip()
@@ -160,6 +181,7 @@ def run_agent(message: str, state: ChatState, limit: int = 6) -> AgentResult:
     new_state = ChatState(
         last_query=query[:500],
         constraints=c,
+        budget=budget,
         shown=[ShownProduct(product_id=p["product_id"], price=p.get("price")) for p in products],
     )
     return AgentResult(text, products, new_state, _suggestions(c))

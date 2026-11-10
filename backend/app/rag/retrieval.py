@@ -43,6 +43,10 @@ def retrieve_products(
     res = query_vectors(qvec, top_k=top_k, flt=build_filter(category, min_price, max_price))
 
     grouped: Dict[int, Dict] = {}
+    # Best non-title chunk per product: the evidence shown to the user and the LLM
+    # (a title match alone says nothing about why the product fits).
+    evidence: Dict[int, tuple] = {}   # pid -> (raw score, field, text)
+
     for match in res.get("matches", []):
         meta = match["metadata"]
         pid = int(float(meta["product_id"]))
@@ -50,6 +54,9 @@ def retrieve_products(
         raw = float(match["score"])
         boost = FIELD_BOOSTS.get(field, 0.0)
         adjusted = raw + boost
+
+        if field != "title" and meta.get("text") and raw > evidence.get(pid, (-1.0,))[0]:
+            evidence[pid] = (raw, field, meta["text"])
 
         current = grouped.get(pid)
         if current is None or adjusted > current["score"]:
@@ -67,4 +74,7 @@ def retrieve_products(
                 "boost": boost,
             }
 
+    for pid, (_, field, text) in evidence.items():
+        grouped[pid]["evidence_field"] = field
+        grouped[pid]["evidence"] = text
     return sorted(grouped.values(), key=lambda x: x["score"], reverse=True)

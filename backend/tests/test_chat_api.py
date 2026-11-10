@@ -62,6 +62,16 @@ def test_followup_keeps_constraints(client):
     assert all(p["category"] == "Shorts" for p in second["results"])
 
 
+def test_category_switch_drops_derived_cheaper_ceiling(client):
+    # "cheaper" narrows below the stated budget; a new category goes back to the budget.
+    first = post(client, "leggings under 2000")
+    second = post(client, "cheaper", first["context"])
+    assert second["constraints"]["max_price"] < 2000
+    third = post(client, "only shorts", second["context"])
+    assert third["constraints"]["max_price"] == 2000
+    assert third["constraints"]["category"] == "Shorts"
+
+
 def test_empty_budget_explains_nearest_price(client):
     body = post(client, "leggings under 500")
     assert body["results"] == []

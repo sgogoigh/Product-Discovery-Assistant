@@ -1,4 +1,6 @@
 import faulthandler
+import os
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -15,9 +17,24 @@ from app.utils.logger import logger
 faulthandler.enable()
 
 
+def _warm_up() -> None:
+    """Open the Pinecone and Gemini connections before the first user does (~7 s cold)."""
+    try:
+        from app.rag.embeddings import embed_query
+        from app.rag.vector_store import ping
+
+        ping()
+        embed_query("leggings")
+        logger.info("Warm-up done")
+    except Exception as exc:
+        logger.warning("Warm-up skipped: %s", str(exc)[:200])
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("Starting AI Product Discovery Assistant backend")
+    if os.getenv("WARMUP", "true").lower() in {"1", "true", "yes"}:
+        threading.Thread(target=_warm_up, name="warmup", daemon=True).start()
     if config.init_db_on_startup():
         try:
             database.init_db()

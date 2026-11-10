@@ -9,6 +9,7 @@ os.environ["GEMINI_API_KEY"] = ""
 os.environ["PINECONE_API_KEY"] = "test"
 os.environ["PINECONE_INDEX"] = "test"
 os.environ["CHAT_LLM"] = "off"
+os.environ["WARMUP"] = "false"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

@@ -51,6 +51,9 @@ class ChatState(BaseModel):
 
     last_query: Optional[str] = Field(default=None, max_length=500)
     constraints: Constraints = Field(default_factory=Constraints)
+    # The budget the user actually stated. "cheaper" narrows `constraints` below it;
+    # switching category goes back to this.
+    budget: Constraints = Field(default_factory=Constraints)
     shown: List[ShownProduct] = Field(default_factory=list, max_length=50)
 
 
